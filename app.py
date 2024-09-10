@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 import datetime
+import json
 import os
 
 # 設置日誌系統
@@ -138,16 +139,39 @@ active_learning_system = ActiveLearningSystem(knowledge_base)
 # 報告和分析系統
 class AnalyticsSystem:
     def __init__(self):
-        self.queries = []
-        self.response_times = []
-        self.sentiments = []
-        self.topics = []
+        self.data_file = 'analytics_data.json'
+        self.load_data()
+
+    def load_data(self):
+        if os.path.exists(self.data_file):
+            with open(self.data_file, 'r') as f:
+                data = json.load(f)
+                self.queries = data.get('queries', [])
+                self.response_times = data.get('response_times', [])
+                self.sentiments = data.get('sentiments', [])
+                self.topics = data.get('topics', [])
+        else:
+            self.queries = []
+            self.response_times = []
+            self.sentiments = []
+            self.topics = []
+
+    def save_data(self):
+        data = {
+            'queries': self.queries,
+            'response_times': self.response_times,
+            'sentiments': self.sentiments,
+            'topics': self.topics
+        }
+        with open(self.data_file, 'w') as f:
+            json.dump(data, f)
 
     def log_interaction(self, query, response_time, sentiment, topic):
         self.queries.append(query)
         self.response_times.append(response_time)
         self.sentiments.append(sentiment)
         self.topics.append(topic)
+        self.save_data()
 
     def generate_report(self, start_date, end_date):
         if not self.queries:  # 檢查是否有數據
@@ -310,13 +334,15 @@ def main():
             start_date = end_date - datetime.timedelta(days=30)
             report, fig = analytics_system.generate_report(start_date, end_date)
             
-            # 顯示報告
             with st.chat_message("assistant"):
-                st.markdown(f"Here's the latest analytics report:\n\n{report}")
-                if fig:
-                    st.pyplot(fig)
+                if report == "No data available for the report.":
+                    st.markdown("There's no data available for the report yet. Try chatting with me first to generate some data!")
                 else:
-                    st.write("No data available to generate charts.")
+                    st.markdown(f"Here's the latest analytics report:\n\n{report}")
+                    if fig:
+                        st.pyplot(fig)
+                    else:
+                        st.write("No data available to generate charts.")
             
             # 添加助手回應到歷史
             st.session_state.chat_history.append({"role": "assistant", "content": f"Here's the latest analytics report:\n\n{report}"})
