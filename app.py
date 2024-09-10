@@ -150,6 +150,9 @@ class AnalyticsSystem:
         self.topics.append(topic)
 
     def generate_report(self, start_date, end_date):
+        if not self.queries:  # 檢查是否有數據
+            return "No data available for the report.", None
+
         df = pd.DataFrame({
             'query': self.queries,
             'response_time': self.response_times,
@@ -160,6 +163,9 @@ class AnalyticsSystem:
 
         mask = (df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)
         df = df.loc[mask]
+
+        if df.empty:  # 檢查過濾後的數據框是否為空
+            return "No data available for the selected date range.", None
 
         fig, axs = plt.subplots(2, 2, figsize=(15, 10))
 
@@ -177,33 +183,45 @@ class AnalyticsSystem:
 
         # 情感分佈
         sentiment_counts = Counter(df['sentiment'])
-        axs[1, 0].pie(sentiment_counts.values(), labels=sentiment_counts.keys(), autopct='%1.1f%%')
-        axs[1, 0].set_title('Sentiment Distribution')
+        if sentiment_counts:  # 確保有情感數據
+            axs[1, 0].pie(sentiment_counts.values(), labels=sentiment_counts.keys(), autopct='%1.1f%%')
+            axs[1, 0].set_title('Sentiment Distribution')
+        else:
+            axs[1, 0].text(0.5, 0.5, 'No sentiment data', ha='center', va='center')
 
         # 熱門主題
         topic_counts = Counter(df['topic']).most_common(5)
-        topics, counts = zip(*topic_counts)
-        axs[1, 1].bar(topics, counts)
-        axs[1, 1].set_title('Top 5 Popular Topics')
-        axs[1, 1].set_xlabel('Topic')
-        axs[1, 1].set_ylabel('Count')
-        plt.setp(axs[1, 1].get_xticklabels(), rotation=45, ha='right')
+        if topic_counts:  # 確保有主題數據
+            topics, counts = zip(*topic_counts)
+            axs[1, 1].bar(topics, counts)
+            axs[1, 1].set_title('Top 5 Popular Topics')
+            axs[1, 1].set_xlabel('Topic')
+            axs[1, 1].set_ylabel('Count')
+            plt.setp(axs[1, 1].get_xticklabels(), rotation=45, ha='right')
+        else:
+            axs[1, 1].text(0.5, 0.5, 'No topic data', ha='center', va='center')
 
         plt.tight_layout()
 
         # 生成報告文字
+        total_queries = len(df)
+        avg_response_time = df['response_time'].mean() if not df['response_time'].empty else 0
         report = f"""
         Analysis Report ({start_date} to {end_date})
 
-        1. Total number of queries: {len(df)}
-        2. Average response time: {df['response_time'].mean():.2f} seconds
-        3. Sentiment distribution:
-           Positive: {sentiment_counts['POSITIVE']} ({sentiment_counts['POSITIVE']/len(df)*100:.1f}%)
-           Neutral: {sentiment_counts['NEUTRAL']} ({sentiment_counts['NEUTRAL']/len(df)*100:.1f}%)
-           Negative: {sentiment_counts['NEGATIVE']} ({sentiment_counts['NEGATIVE']/len(df)*100:.1f}%)
-        4. Top 5 popular topics:
-           {', '.join([f"{topic} ({count})" for topic, count in topic_counts])}
+        1. Total number of queries: {total_queries}
+        2. Average response time: {avg_response_time:.2f} seconds
         """
+
+        if sentiment_counts:
+            report += "3. Sentiment distribution:\n"
+            for sentiment, count in sentiment_counts.items():
+                percentage = (count / total_queries) * 100 if total_queries > 0 else 0
+                report += f"   {sentiment}: {count} ({percentage:.1f}%)\n"
+
+        if topic_counts:
+            report += "4. Top 5 popular topics:\n"
+            report += ", ".join([f"{topic} ({count})" for topic, count in topic_counts])
 
         return report, fig
 
@@ -295,7 +313,10 @@ def main():
             # 顯示報告
             with st.chat_message("assistant"):
                 st.markdown(f"Here's the latest analytics report:\n\n{report}")
-                st.pyplot(fig)
+                if fig:
+                    st.pyplot(fig)
+                else:
+                    st.write("No data available to generate charts.")
             
             # 添加助手回應到歷史
             st.session_state.chat_history.append({"role": "assistant", "content": f"Here's the latest analytics report:\n\n{report}"})
